@@ -343,15 +343,7 @@ def map_cells_to_space(
 
         # 计算映射矩阵，MapperConstrained映射优化器用于在约束条件下优化单细胞与空间位置之间的映射关系
         mapper = mo.MapperConstrained(
-            S=mapper = mo.Mapper(
             S=S, G=G, d=d, device=device, random_state=random_state, **hyperparameters,
-        )
-
-        # TODO `train` should return the loss function
-
-        mapping_matrix, training_history = mapper.train(
-            learning_rate=learning_rate, num_epochs=num_epochs, print_each=print_each,
-        ), G=G, d=d, device=device, random_state=random_state, **hyperparameters,
         )
 
         mapping_matrix, F_out, training_history = mapper.train(

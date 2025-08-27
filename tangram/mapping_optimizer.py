@@ -165,6 +165,10 @@ class Mapper:
         
         Returns:
             Tuple of 3 Arrays: getis_ord_G_star, moran_I, gearys_C
+            计算三个空间自相关指标，用于衡量基因表达在空间上的分布特性，都是返回spots×genes矩阵
+            getis_ord_G_star反映某个空间点及其邻域内基因表达是否显著高于整体平均水平
+            如果某基因在相邻空间点表达值相似（高-高或低-低），Moran's I 就高，说明表达有空间聚集性
+            如果空间点之间表达值差异大，Geary's C 就高，说明表达分布更分散。
         """
         getis_ord_G_star = None
         if self.lambda_getis_ord > 0:
@@ -198,17 +202,20 @@ class Mapper:
         """
         G = self.G_train
         S = self.S_train
+        # 映射矩阵做归一化
         M_probs = softmax(self.M, dim=1)
+        # 计算预测的映射结果spots×genes矩阵
         G_pred = torch.matmul(M_probs.t(), S)
         
-        # gene expression similarity terms
+        # gene expression similarity terms 基因表达相似性项
         gv_term = self.lambda_g1 * cosine_similarity(G_pred, G, dim=0).mean()
         vg_term = self.lambda_g2 * cosine_similarity(G_pred, G, dim=1).mean()
         expression_term = gv_term + vg_term
         main_loss = (gv_term / self.lambda_g1).tolist()
         vg_reg = (vg_term / self.lambda_g2).tolist()
         
-        # density regularization terms
+        # density regularization terms密度正则项
+        # 用于约束预测的空间点密度分布，使其接近真实空间密度分布
         if self.target_density_enabled:
             # KL wants the log in first argument
             if self.source_density_enabled:
@@ -220,17 +227,19 @@ class Mapper:
         else:
             density_term, kl_reg = 0, np.nan
         
-        # entropy regularization terms
+        # entropy regularization terms 熵正则项
         entropy_term = self.lambda_r * -(torch.log(M_probs) * M_probs).sum()
         entropy_reg = (entropy_term / self.lambda_r).tolist()
 
-        # l1 and l2 regularization terms
+        # l1 and l2 regularization terms L1和L2正则项
+        # 用于控制映射矩阵的稀疏性和数值稳定性
         l1_term = self.lambda_l1 * self.M.abs().sum()
         l1_reg = (l1_term / self.lambda_l1).tolist()
         l2_term = self.lambda_l2 * (self.M ** 2).sum()
         l2_reg = (l2_term / self.lambda_l2).tolist()
 
-        # spatial neighborhood-based gene expression term
+        # spatial neighborhood-based gene expression term 空间邻域基因表达项
+        # 用于增强空间上相邻点的基因表达相似性
         if self.lambda_neighborhood_g1 > 0:
             gv_neighborhood_term = self.lambda_neighborhood_g1 * cosine_similarity(self.voxel_weights @ G_pred, 
                                                                                    self.voxel_weights @ G, dim=0).mean()
@@ -238,7 +247,8 @@ class Mapper:
         else:
             gv_neighborhood_term, gv_neighborhood_sim = 0, np.nan
 
-        # cell type island enforcement
+        # cell type island enforcement 细胞类型岛屿项
+        # 用于促进同一细胞类型在空间上的聚集，减少孤立的细胞类型spot
         if self.lambda_ct_islands > 0:
             ct_map = (M_probs.T @ self.ct_encode)
             ct_island_term = self.lambda_ct_islands * (torch.max((ct_map) - (self.neighborhood_filter @ ct_map),

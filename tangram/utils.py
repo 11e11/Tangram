@@ -128,6 +128,7 @@ def project_cell_annotations(
 ):
     """
     Transfer `annotation` from single cell data onto space. 
+    将单细胞数据中的细胞类型注释映射到空间数据上
 
     Args:
         adata_map (AnnData): cell-by-spot AnnData returned by `train` function.
